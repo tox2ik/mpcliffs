@@ -8,6 +8,7 @@ case "$0" in
 
 		WLRANGE=${1:-7}
 
+		#TODO generalize ison
 		ISON=`mpc |grep -Eo '\[playing\]\ #[0-9]+' | cut -d\# -f 2`
 
 		if [  -z $ISON  ];then
@@ -281,6 +282,26 @@ case "$0" in
 	next) mpc-x next ;;
 	prev) mpc-x prev ;;
 
+	*mpc-queue) 
+
+		if [ -z $1 ]; then 
+			echo usage: $0 id
+			exit 1
+		fi
+		#TODO generalize ison
+		ISON=`mpc |grep -Eo '\[playing\]\ #[0-9]+' | cut -d\# -f 2`
+
+		if [  -z $ISON  ];then
+			ISON=$(
+				cat `awk '/state_file/ {print $2}' $CONF |\
+				tr -d \'\"` |\
+				awk -F': ' ' NR=6 && /current:/ {print $2}'
+			)
+		fi
+
+		mpc move $1 $ISON;
+		;;
+
 	*) 
 		echo "install [target]: make symlinks in \$1 or `pwd`"
 		echo mpc-whatson
@@ -291,6 +312,7 @@ case "$0" in
 		echo mpc-keep
 		echo mpc-cdnp
 		echo mpc-symlink
+		echo mpc-queue
 		echo mpc-pwd-update
 		echo mpc-pwd-add
 		echo "mpc-x [next|prev|%position%]"
