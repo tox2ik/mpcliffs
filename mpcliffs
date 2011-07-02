@@ -1,0 +1,307 @@
+#!/bin/bash
+
+	CONF=/etc/mpd.conf
+	LAFO=$HOME/.mpc/lastfound
+
+case "$0" in 
+	*mpc-whatson) 
+
+		WLRANGE=${1:-7}
+
+		ISON=`mpc |grep -Eo '\[playing\]\ #[0-9]+' | cut -d\# -f 2`
+
+		if [  -z $ISON  ];then
+			ISON=$(
+				cat `awk '/state_file/ {print $2}' $CONF |\
+				tr -d \'\"` |\
+				awk -F': ' ' NR=6 && /current:/ {print $2}'
+			)
+		fi
+
+		if [ ! -z $ISON  ];then
+
+
+			FORMAT="%position%\t [[[[%albumartist]|[%artist%]]&[ - %album%]&"
+			FORMAT+="[ [-%track%]- %title% [(%time%)]]]|%file%]"
+
+			mpc -f "$FORMAT" playlist |\
+				grep "^$ISON" -B $(( WLRANGE/2 + 1)) -A $(( WLRANGE*2 )) |\
+				sed -e "s/$ISON/$ISON>/"
+		else 
+			echo Nothing is or was playing.
+
+		fi
+
+		;;
+
+	*mpc-jump)
+
+		PLAYLAST=0
+			  FS=~~~~
+			   T=(
+					#%name%         # Unknown (doesn't produce output)
+					%artist%       # Artist file tag
+					%album%        # Album file tag
+					%albumartist%  # Album Artist file tag
+					%composer%     # Composer file tag
+					%title%        # Title file tag
+					%track%        # Track file tag
+					%time%         # Duration of file
+					%file%         # Relative path to `music_directory`
+					%position%     # Playlist track number
+					%date%	  	   # <<Unmentioned in docs>>
+		)
+		 FT="%position%$FS"
+		FT+="[[[[%albumartist]|[%artist%]]&[ - %album%]&[ [-%track%]- %title% "
+		FT+="[(%time%)]]]$FS[%file% [(%time%)]]]"
+
+			 FORMAT=$FT
+		for i in "${T[@]}";do 
+			FORMAT+=$FS${i//%/}:$i ;done
+			FORMAT+=$FS
+				MPC="mpc -f '$FORMAT' playlist"
+				  G='|grep -i '
+
+		# iterate over arguments and accumulate filters:
+		# `mpc-jump moxart rquiem lacrimosa year=2003' gives;
+		# grep mozart | grep requiem  | grep lacrimoza | grep year:[^~]*2003[^~]*
+
+		while [ $# -ne 0 ]
+		do
+			case "$1" in 
+				-x) PLAYLAST=1;;
+				 *) if [[ $1 == *=* ]]; then
+						case "$1" in
+							artist=*|a=*|art=*			 ) F=" $F $G \"${FS}${T[0]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							album=*|b=*|alb=*			 ) F=" $F $G \"${FS}${T[1]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							albumartist=*|A=*|art=*		 ) F=" $F $G \"${FS}${T[2]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							composer=*|c=*|comp=*        ) F=" $F $G \"${FS}${T[3]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							title=*|t=*|song=*			 ) F=" $F $G \"${FS}${T[4]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							track=*|n=*|number=*|no=*|nr=) F=" $F $G \"${FS}${T[5]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							time=*|e=*|duration=*|d=*	 ) F=" $F $G \"${FS}${T[6]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							file=*|f=*|path=*|p=*|dir=*	 ) F=" $F $G \"${FS}${T[7]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							position=*|pos=*			 ) F=" $F $G \"${FS}${T[8]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+							date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+														*);;
+						esac
+					else
+						GREP="$GREP |grep -i \"$1\""
+					fi ;;
+			esac
+			shift
+		done
+
+		eval "$MPC $GREP $F" |\
+		awk 'BEGIN {FS = "~~~~"}; {printf "%s\t %s\n", $1,  $2? $2 : $3} '
+
+
+		# todo: figure out how to find the last track 
+		# after one run of eval. with tee or whatever
+		lf=$(eval "$MPC $GREP $F |tail -n 1 | cut -d~ -f1")
+		if [ $PLAYLAST -eq 1 ];then
+			mpc play  $lf
+		fi
+		echo $lf > $LAFO
+
+		#echo  "$MPC $GREP $F" 
+		;;
+
+	*mpc-fade) 
+
+		if [ $# -ne 3 ]; then
+			echo "usage: mpc-fade <start> <end> <duration>" ;
+			exit 1;
+		fi
+
+		if [ ! -x `which bc` ]; then 
+			echo mpc-fade relies on bc. get it. 
+			exit 1
+		fi
+
+		VOLUME=$1
+
+		if [ $1 -lt $2 ]; then 
+			step=`echo "scale=3;$3/($2-$1)"|bc -l`; D=1; else
+			step=`echo "scale=3;$3/($1-$2)"|bc -l`; D=-1 
+		fi
+
+		TVOL=$(( $2 + D ))
+
+		$(  #fork
+		while [ $VOLUME -ne $TVOL ]; do
+			mpc volume $VOLUME > /dev/null
+			VOLUME=$(( VOLUME + D )) 
+			sleep $step;
+		done
+		)& ;;
+
+	*mpc-wake) 
+		mpc random
+		mpc play
+		mpc-fade $1 $2 $3 ;;
+
+	*mpc-remove|\
+	*mpc-keep) 
+		if [ $# -eq 0 ];
+		then
+			echo "usage: mpc-<remove|keep> <list of strings to match>"
+			exit 1
+		fi
+
+		[[ $0 == *mpc-remove ]] && G="grep -i "
+		[[ $0 == *mpc-keep ]] && G="grep -iv "
+
+
+		FORMAT="%position%) [%artist%] [%albumartist%] [%album%] [%title%] "
+		FORMAT+="[%year%] [%composer%] %file%"
+
+		# concatenate filter
+		for artist in "$@";do
+			GREP="|$G \"$artist\" $GREP"
+		done
+
+		# find playlist position numbers of matched songs and reverse them
+		mn=(`eval "mpc --format \"$FORMAT\" playlist $GREP | sed 's/).*//'"`) 
+		mn=(`for i in ${mn[@]}; do echo $i;done |sort -nr` )
+
+
+		len=${#mn[@]}
+
+		pl=`mpc playlist|wc -l`
+
+		if [ $len -eq 0   ];then 
+			 echo no matches >/dev/stderr; exit 1; fi
+
+		if [ $len -eq $pl ];then 
+			echo "please use mpc clear to remove everything (no matches)" \
+			>/dev/stderr ; exit 1; fi
+
+		# ranges of matching songs and 
+		# indexes for arrays:
+		# 	(one range: rl[1]-rr[1])
+
+		k=0; 	j=0; 	d1=false;
+		rr=(); 	rl=();	rc=0
+
+		# in java...
+		#
+		#	for (i=0; i<len; i++){
+		#		j=i;
+		#		k=i+1;
+		#		do {
+		#			d1 = (k<len)? (mn[j]-mn[k]==1) : false;
+		#			if ( d1 ){
+		#				j++;
+		#				k++;
+		#			}
+		#		} while ( d1 );
+		#		ranges.add(new int[]{mn[j], mn[i]});
+		#		i=j;
+		#	}
+		#
+		# and bash:										
+
+		for (( i=0; i < $len; i++ ));
+		do
+			let j=$i
+			let k=i+1
+
+			if [ $k -lt $len ]; then
+				let d=${mn[j]}-${mn[k]}
+			else
+				d=0;
+			fi
+
+			while [ $d -eq 1 ];
+			do
+				if [ $k -lt $len ]; then
+					let d=${mn[j]}-${mn[k]}
+				else
+					d=0;
+				fi
+				if [ $d -eq 1 ];
+				then
+					let k=$k+1
+					let j=$j+1
+				fi
+			done
+
+			rl[$rc]=${mn[j]}
+			rr[$rc]=${mn[i]}
+			let rc=$rc+1
+			i=$j
+		done
+
+		# remove the ranges
+		for (( i=0; i< $rc; i++));
+		do
+			mpc del ${rl[i]}-${rr[i]}
+		done
+		;;
+
+
+		*cdnp|\
+	*mpc-cdnp)
+
+		# this works because I have:
+		# $ alias cdnp="mpc-cdnp; history -r"
+		#
+		# $ ll /home/mpd/music /M
+		# lrwxrwxrwx 1 root     root   2 2010-02-25 01:29 /home/mpd/music -> /M
+		# 
+		# /M:
+		# total 0
+		# lrwxrwxrwx 1 root     root     17 2009-05-04 06:41 musikkkk -> /R/audio/musikkkk
+		# lrwxrwxrwx 1 root     root     15 2009-05-04 06:41 muzica -> /R/audio/muzica
+
+		DIR=$(echo /M/`mpc --format "%file%" |head -n1` |rev |cut -d / -f 2-|rev)
+		if [ -z "$1" ] ;then
+			echo cd \"$DIR\" |tee >> ~/.bash_history >(cat)
+		else 
+			cd "$DIR" 
+		fi ;;
+	*mpc-symlink)
+		if [ -d "$1" ]  ;then 
+			ln -s "/M/`mpc --format %file% | head -n1 `" "$1"
+		else 
+			ln -s "/M/`mpc --format %file% | head -n1 `" .
+		fi ;;
+	*mpc-pwd-update) 	mpc update  "`pwd  | cut -d/ -f 3-`" ;;
+	*mpc-pwd-add)		mpc add  "`pwd  | cut -d/ -f 3-`"	;;
+
+	*mpc-x)
+		case "$1" in
+			next) mpc next |head -n 1|rev | cut -d / -f 1 | rev ;;
+			prev) mpc prev |head -n 1|rev | cut -d / -f 1 | rev ;;
+			[0-9]*) mpc play $1|head -n 1|rev | cut -d / -f 1 | rev ;;
+			   *) mpc play `cat $LAFO`|head -n 1|rev | cut -d / -f 1 | rev ;;
+		esac
+		;;
+	*x) mpc-x $1;;
+	next) mpc-x next ;;
+	prev) mpc-x prev ;;
+
+	*) 
+		echo "install [target]: make symlinks in \$1 or `pwd`"
+		echo mpc-whatson
+		echo mpc-jump
+		echo mpc-fade
+		echo mpc-wake
+		echo mpc-remove
+		echo mpc-keep
+		echo mpc-cdnp
+		echo mpc-symlink
+		echo mpc-pwd-update
+		echo mpc-pwd-add
+		echo "mpc-x [next|prev|%position%]"
+
+		if [ "$1" == "install" ];
+		then
+
+		for i in `$0 |awk '/mpc-/ {print $1}'`;do 
+			 ln -s "$0" ${2:-.}/$i
+		done
+		echo ok. call the symlinks...
+		fi;;
+
+esac
