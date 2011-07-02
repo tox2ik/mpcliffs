@@ -25,9 +25,12 @@ case "$0" in
 			FORMAT="%position%\t [[[[%albumartist]|[%artist%]]&[ - %album%]&"
 			FORMAT+="[ [-%track%]- %title% [(%time%)]]]|%file%]"
 
+
+
 			mpc -f "$FORMAT" playlist |\
-				grep "^$ISON" -B $(( WLRANGE/2 + 1)) -A $(( WLRANGE*2 )) |\
-				sed -e "s/$ISON/$ISON>/"
+				grep "^$ISON	" -B $(( WLRANGE/2 + 1)) -A $(( WLRANGE*2 )) |\
+				sed -e "s/$ISON/$ISON>/" 
+
 		else 
 			echo Nothing is or was playing.
 
