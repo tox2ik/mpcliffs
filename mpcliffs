@@ -6,7 +6,7 @@
 case "$0" in 
 	*mpc-whatson) 
 
-		WLRANGE=${1:-7}
+		WLRANGE=${1:-20}
 
 		#TODO generalize ison
 		ISON=`mpc |grep -Eo '\[playing\]\ #[0-9]+' | cut -d\# -f 2`
@@ -22,14 +22,17 @@ case "$0" in
 		if [ ! -z $ISON  ];then
 
 
-			FORMAT="%position%\t [[[[%albumartist]|[%artist%]]&[ - %album%]&"
-			FORMAT+="[ [-%track%]- %title% [(%time%)]]]|%file%]"
+			FORMAT="%position%\t [[[%albumartist]|[%artist%]]&[ - %album%]&[ [-%track%]- %title% [(%time%)]]]|%file%]"
 
+			BEFORE=`echo "scale=2;$WLRANGE/2+1"|bc`
+			AFTER=`echo "scale=2;($WLRANGE*1.1+1)-($WLRANGE)/4"|bc`
+			BEFORE=${BEFORE%.[0-9]*}
+			AFTER=${AFTER%.[0-9]*}
 
 
 			mpc -f "$FORMAT" playlist |\
-				grep "^$ISON	" -B $(( WLRANGE/2 + 1)) -A $(( WLRANGE*2 )) |\
-				sed -e "s/$ISON/$ISON>/" 
+				grep "^$ISON	" -B $BEFORE -A $AFTER|\
+				sed -e "s/^$ISON	/$ISON>\t/" 
 
 		else 
 			echo Nothing is or was playing.
@@ -251,18 +254,24 @@ case "$0" in
 		# $ alias cdnp="mpc-cdnp; history -r"
 		#
 		# $ ll /home/mpd/music /M
-		# lrwxrwxrwx 1 root     root   2 2010-02-25 01:29 /home/mpd/music -> /M
+		#  2010-02-25 01:29 /home/mpd/music -> /M
 		# 
 		# /M:
-		# total 0
-		# lrwxrwxrwx 1 root     root     17 2009-05-04 06:41 musikkkk -> /R/audio/musikkkk
-		# lrwxrwxrwx 1 root     root     15 2009-05-04 06:41 muzica -> /R/audio/muzica
+		#  2009-05-04 06:41 musikkkk -> /R/audio/musikkkk
+		#  2009-05-04 06:41 muzica -> /R/audio/muzica
 
-		DIR=$(echo /M/`mpc --format "%file%" |head -n1` |rev |cut -d / -f 2-|rev)
+		#|awk 'NR==1 {split($0,a,"/"); print substr($0, 1, length($0) - length(a[length(a)]))  }'
+		# awk 'NR==1 {split($0,a,"/"); for (i=0; i<length(a)-1; i++){ printf "%s/", a[i] } }'
+		#dirname  "`mpc --format=%file% |head -n1 `" 
+
+		#DIR=$(echo /M/`mpc --format "%file%" |head -n1` |rev |cut -d / -f 2-|rev)
+		DIR=$(dirname  "`mpc --format=%file% |head -n1 `")
+		echo $DIR
 		if [ -z "$1" ] ;then
+			echo wat
 			echo cd \"$DIR\" |tee >> ~/.bash_history >(cat)
 		else 
-			cd "$DIR" 
+			echo cd \"$DIR\" 
 		fi ;;
 	*mpc-symlink)
 		if [ -d "$1" ]  ;then 
@@ -270,6 +279,7 @@ case "$0" in
 		else 
 			ln -s "/M/`mpc --format %file% | head -n1 `" .
 		fi ;;
+
 	*mpc-pwd-update) 	mpc update  "`pwd  | cut -d/ -f 3-`" ;;
 	*mpc-pwd-add)		mpc add  "`pwd  | cut -d/ -f 3-`"	;;
 
