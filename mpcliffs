@@ -251,7 +251,7 @@ case "$0" in
 	*mpc-cdnp)
 
 		# this works because I have:
-		# $ alias cdnp="mpc-cdnp; history -r"
+		# $ alias cdnp="mpc-cdnp 1; history -r"
 		#
 		# $ ll /home/mpd/music /M
 		#  2010-02-25 01:29 /home/mpd/music -> /M
@@ -265,13 +265,11 @@ case "$0" in
 		#dirname  "`mpc --format=%file% |head -n1 `" 
 
 		#DIR=$(echo /M/`mpc --format "%file%" |head -n1` |rev |cut -d / -f 2-|rev)
-		DIR=$(dirname  "`mpc --format=%file% |head -n1 `")
-		echo $DIR
+		DIR=$(echo /M/`dirname "$(mpc --format "%file%" |head -n1)"`)
 		if [ -z "$1" ] ;then
-			echo wat
 			echo cd \"$DIR\" |tee >> ~/.bash_history >(cat)
 		else 
-			echo cd \"$DIR\" 
+			echo $DIR
 		fi ;;
 	*mpc-symlink)
 		if [ -d "$1" ]  ;then 
