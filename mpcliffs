@@ -262,7 +262,6 @@ case "$0" in
 
 		#|awk 'NR==1 {split($0,a,"/"); print substr($0, 1, length($0) - length(a[length(a)]))  }'
 		# awk 'NR==1 {split($0,a,"/"); for (i=0; i<length(a)-1; i++){ printf "%s/", a[i] } }'
-		#dirname  "`mpc --format=%file% |head -n1 `" 
 
 		#DIR=$(echo /M/`mpc --format "%file%" |head -n1` |rev |cut -d / -f 2-|rev)
 		DIR=$(echo /M/`dirname "$(mpc --format "%file%" |head -n1)"`)
