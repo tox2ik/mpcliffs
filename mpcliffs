@@ -10,8 +10,8 @@ DEPMSG="WARNING: Some of the scripts rely on APP from "
 [ -x "`which awk 2>/dev/null`" ] || echo \
 	${DEPMSG/APP/awk} http://www.gnu.org/software/gawk/gawk.html
 
-	CONF=/etc/mpd.conf
-	LAFO=$HOME/.mpc/lastfound
+CONF=/etc/mpd.conf
+LAFO=$HOME/.mpc/lastfound
 
 case "$0" in 
 	*mpc-whatson) 
@@ -52,24 +52,23 @@ case "$0" in
 		;;
 
 	*mpc-jump)
-
 		PLAYRANDOM=0
 		PLAYLAST=0
-			  FS=~~~~
-			   T=(
-					#%name%         # Unknown (doesn't produce output)
-					%artist%       # Artist file tag
-					%album%        # Album file tag
-					%albumartist%  # Album Artist file tag
-					%composer%     # Composer file tag
-					%title%        # Title file tag
-					%track%        # Track file tag
-					%time%         # Duration of file
-					%file%         # Relative path to `music_directory`
-					%position%     # Playlist track number
-					%date%	  	   # <<Unmentioned in docs>>
+		FS=~~~~
+		T=(
+			#%name%         # Unknown (doesn't produce output)
+			%artist%       # Artist file tag
+			%album%        # Album file tag
+			%albumartist%  # Album Artist file tag
+			%composer%     # Composer file tag
+			%title%        # Title file tag
+			%track%        # Track file tag
+			%time%         # Duration of file
+			%file%         # Relative path to `music_directory`
+			%position%     # Playlist track number
+			%date%	  	   # <<Unmentioned in docs>>
 		)
-		 FT="%position%$FS"
+		FT="%position%$FS"
 		FT+="[[[[%albumartist]|[%artist%]]&[ - %album%]&[ [-%track%]- %title% "
 		FT+="[(%time%)]]]$FS[%file% [(%time%)]]]"
 
@@ -91,16 +90,17 @@ case "$0" in
 				-x) PLAYLAST=1;;
 				 *) if [[ $1 == *=* ]]; then
 						case "$1" in
-							artist=*|a=*|art=*			 ) F=" $F $G \"${FS}${T[0]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							album=*|b=*|alb=*			 ) F=" $F $G \"${FS}${T[1]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							albumartist=*|A=*|art=*		 ) F=" $F $G \"${FS}${T[2]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							composer=*|c=*|comp=*        ) F=" $F $G \"${FS}${T[3]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							title=*|t=*|song=*			 ) F=" $F $G \"${FS}${T[4]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							track=*|n=*|number=*|no=*|nr=) F=" $F $G \"${FS}${T[5]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							time=*|e=*|duration=*|d=*	 ) F=" $F $G \"${FS}${T[6]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							file=*|f=*|path=*|p=*|dir=*	 ) F=" $F $G \"${FS}${T[7]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							position=*|pos=*			 ) F=" $F $G \"${FS}${T[8]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-							date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+
+artist=*|a=*|art=*			 ) F=" $F $G \"${FS}${T[0]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+album=*|b=*|alb=*			 ) F=" $F $G \"${FS}${T[1]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+albumartist=*|A=*|art=*		 ) F=" $F $G \"${FS}${T[2]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+composer=*|c=*|comp=*        ) F=" $F $G \"${FS}${T[3]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+title=*|t=*|song=*			 ) F=" $F $G \"${FS}${T[4]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+track=*|n=*|number=*|no=*|nr=) F=" $F $G \"${FS}${T[5]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+time=*|e=*|duration=*|d=*	 ) F=" $F $G \"${FS}${T[6]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+file=*|f=*|path=*|p=*|dir=*	 ) F=" $F $G \"${FS}${T[7]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+position=*|pos=*			 ) F=" $F $G \"${FS}${T[8]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
+date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 														*);;
 						esac
 					else
@@ -114,11 +114,6 @@ case "$0" in
 		eval "$MPC $GREP $F" |\
 		awk 'BEGIN {FS = "~~~~"}; {printf "%s\t %s\n", $1,  $2? $2 : $3} '`
 
-
-		## todo: figure out how to find the last track 
-		## after one run of eval. with tee or whatever
-		#lf=$(eval "$MPC $GREP $F |tail -n 1 | cut -d~ -f1")
-
 		lf=$(echo "$RESULTS" |tail -n 1 | cut -d ' ' -f1)
 		echo $lf > $LAFO
 
@@ -126,7 +121,7 @@ case "$0" in
 			echo "$RESULTS"
 			mpc play  $lf
 		elif [ $PLAYRANDOM -eq 1 ]; then
-			# TODO make bash-random work
+			# todo: make bash-random work
 			# total=`echo "$RESULTS" | wc -l`
 			# r=$RANDOM 
 			# r=$(( ${r:0:1}+${RANDOM:0:1} ))
@@ -226,22 +221,20 @@ case "$0" in
 		rr=(); 	rl=();	rc=0
 
 		# in java...
-		#
-		#	for (i=0; i<len; i++){
-		#		j=i;
-		#		k=i+1;
-		#		do {
-		#			d1 = (k<len)? (mn[j]-mn[k]==1) : false;
-		#			if ( d1 ){
-		#				j++;
-		#				k++;
-		#			}
-		#		} while ( d1 );
-		#		ranges.add(new int[]{mn[j], mn[i]});
-		#		i=j;
-		#	}
-		#
-		# and bash:										
+		#  for (i=0; i<len; i++){
+		#    j=i;
+		#    k=i+1;
+		#      do {
+		#        d1 = (k<len)? (mn[j]-mn[k]==1) : false;
+		#        if ( d1 ){
+		#          j++;
+		#          k++;
+		#        }
+		#      } while ( d1 );
+		#      ranges.add(new int[]{mn[j], mn[i]});
+		#      i=j;
+		#  }
+		# ...and bash:
 
 		for (( i=0; i < $len; i++ ));
 		do
