@@ -1,0 +1,31 @@
+mpcliffs
+========
+
+all-in-one tool to search for and play entries in a the current mpd playlist.
+
+
+installation
+------------
+invoke without arguments and you will see something like:
+
+./mpcliffs install [target]: make symlinks in $1 
+  or here in: (/home/jaroslav/src/bash/mpcliffs)
+
+so give it a folder where to put the links and it will create symlinks to 
+itself.
+
+subcommands
+-----------
+
+mpc-whatson		#
+mpc-jump
+mpc-fade
+mpc-wake
+mpc-remove
+mpc-keep
+mpc-cdnp
+mpc-symlink
+mpc-queue
+mpc-pwd-update
+mpc-pwd-add
+mpc-x [next|prev|%position%]

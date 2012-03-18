@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# TODO
+# speecify a ROOT folder and make functions that depend on /M use $ROOT instead
+
+DEPMSG="WARNING: Some of the scripts rely on APP from "
+
+[ -x "`which rl 2>/dev/null`" ] || echo \
+	${DEPMSG/APP/rl} http://ch.tudelft.nl/~arthur/rl/
+[ -x "`which awk 2>/dev/null`" ] || echo \
+	${DEPMSG/APP/awk} http://www.gnu.org/software/gawk/gawk.html
+
 	CONF=/etc/mpd.conf
 	LAFO=$HOME/.mpc/lastfound
 
@@ -43,6 +53,7 @@ case "$0" in
 
 	*mpc-jump)
 
+		PLAYRANDOM=0
 		PLAYLAST=0
 			  FS=~~~~
 			   T=(
@@ -76,6 +87,7 @@ case "$0" in
 		while [ $# -ne 0 ]
 		do
 			case "$1" in 
+				-r) PLAYRANDOM=1;;
 				-x) PLAYLAST=1;;
 				 *) if [[ $1 == *=* ]]; then
 						case "$1" in
@@ -98,17 +110,38 @@ case "$0" in
 			shift
 		done
 
+		RESULTS=`\
 		eval "$MPC $GREP $F" |\
-		awk 'BEGIN {FS = "~~~~"}; {printf "%s\t %s\n", $1,  $2? $2 : $3} '
+		awk 'BEGIN {FS = "~~~~"}; {printf "%s\t %s\n", $1,  $2? $2 : $3} '`
 
 
-		# todo: figure out how to find the last track 
-		# after one run of eval. with tee or whatever
-		lf=$(eval "$MPC $GREP $F |tail -n 1 | cut -d~ -f1")
-		if [ $PLAYLAST -eq 1 ];then
-			mpc play  $lf
-		fi
+		## todo: figure out how to find the last track 
+		## after one run of eval. with tee or whatever
+		#lf=$(eval "$MPC $GREP $F |tail -n 1 | cut -d~ -f1")
+
+		lf=$(echo "$RESULTS" |tail -n 1 | cut -d ' ' -f1)
 		echo $lf > $LAFO
+
+		if [ $PLAYLAST -eq 1 ];then
+			echo "$RESULTS"
+			mpc play  $lf
+		elif [ $PLAYRANDOM -eq 1 ]; then
+			# TODO make bash-random work
+			# total=`echo "$RESULTS" | wc -l`
+			# r=$RANDOM 
+			# r=$(( ${r:0:1}+${RANDOM:0:1} ))
+			# # combine the first digit of two $RANDOM 
+			# # (becasue only one gives r < 0.7 way too often)
+			# random=`echo scale=2\;$total*0.${r}+1 |bc` # 100*0.r+1
+			# random=${random/\.*/''} 
+			# rlf=$(echo "$RESULTS" | awk 'NR=='$random' {print $0;}')
+			# #echo $rlf
+			# #echo mpc play $(echo $rlf | cut -d ' ' -f1) \[$total*0.${r}+1 = $random\]
+			mpc play $(echo "$RESULTS" | rl -c1 | cut -d ' ' -f1)
+		else 
+			echo "$RESULTS"
+		fi
+
 
 		#echo  "$MPC $GREP $F" 
 		;;
@@ -145,10 +178,12 @@ case "$0" in
 	*mpc-wake) 
 		mpc random
 		mpc play
-		mpc-fade $1 $2 $3 ;;
+		mpc-fade 10 100 300 ;;
+		#mpc-fade $1 $2 $3 ;;
 
 	*mpc-remove|\
 	*mpc-keep) 
+		# TODO: use results from mpc-jump (to make use of year= and the like)
 		if [ $# -eq 0 ];
 		then
 			echo "usage: mpc-<remove|keep> <list of strings to match>"
@@ -163,8 +198,8 @@ case "$0" in
 		FORMAT+="[%year%] [%composer%] %file%"
 
 		# concatenate filter
-		for artist in "$@";do
-			GREP="|$G \"$artist\" $GREP"
+		for filter in "$@";do
+			GREP="|$G \"$filter\" $GREP"
 		done
 
 		# find playlist position numbers of matched songs and reverse them
@@ -251,7 +286,7 @@ case "$0" in
 	*mpc-cdnp)
 
 		# this works because I have:
-		# $ alias cdnp="mpc-cdnp 1; history -r"
+		# $ alias cdnp="history -a; mpc-cdnp 1; history -r"
 		#
 		# $ ll /home/mpd/music /M
 		#  2010-02-25 01:29 /home/mpd/music -> /M
@@ -313,24 +348,30 @@ case "$0" in
 		;;
 
 	*) 
-		echo "install [target]: make symlinks in \$1 or `pwd`"
-		echo mpc-whatson
-		echo mpc-jump
-		echo mpc-fade
-		echo mpc-wake
-		echo mpc-remove
-		echo mpc-keep
-		echo mpc-cdnp
-		echo mpc-symlink
-		echo mpc-queue
-		echo mpc-pwd-update
-		echo mpc-pwd-add
-		echo "mpc-x [next|prev|%position%]"
+		echo -e "$0 install [target]: make symlinks in \$2 \n  or here in: (`pwd`)\n"
+		echo -e mpc-whatson	"\tdisplays a part of the current list with the \n\t\tcurrently playing song somewhere in the middle"
+		echo -e mpc-jump	"\tgreps \`mpc playlist\` like so: \n\t\t\
+mpc-jump nick cave lime-tree arbour => \n\t\t\
+mpc playlist |\\ \n\t\t  grep -i nick |\\ \n\t\t  grep -i cave |\\ \n\t\t  grep -i lime-tree |\\ \n\t\t  grep -i arbour\n\t\t\
+-x anywhere in the argument list will play the last found song\n\t\t\
+-r will play a random song from the found list\n\t\t\
+supports specific flags filters like year=, artist=, title=\n\t\t(see code for full list) 
+"
+		echo -e mpc-fade "\ttakes 3 arguments and fades the volume \n\t\tfrom level (1) to level (2) in a number of seconds (3)\n\t\truns in the background"
+		echo -e mpc-wake "\tstarts playing and uses mpc-fase (edit at will)"
+		echo -e mpc-remove "\tremoves songs matching filter arguments (like mpc-jump)"
+		echo -e mpc-keep "\tsame as mpc-remove with inverse result"
+		echo -e mpc-cdnp "\tputs \`cd dir-of-now-playing-song\' in bash history\n\t\t(will need adjustments on your comp)"
+		echo -e mpc-symlink "\tcreates a symlink to the now-playing-song in \$2 \n\t\tor this folder if omitted"
+		echo -e mpc-queue "\tplaces a given song (queue number as seen in mpc-jump output)\n\t\tafter currently playing song"
+		echo -e mpc-pwd-update "\tmpc update \` folder where you are\'"
+		echo -e mpc-pwd-add "mpc add \` folder where you are\'"
+		echo -e mpc-x "\t\tplay [next|prev|%position%]"
 
 		if [ "$1" == "install" ];
 		then
 
-		for i in `$0 |awk '/mpc-/ {print $1}'`;do 
+		for i in `$0 |awk '/^mpc-/ {print $1}'`;do 
 			 ln -s "$0" ${2:-.}/$i
 		done
 		echo ok. call the symlinks...
