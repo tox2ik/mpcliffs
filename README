@@ -17,15 +17,4 @@ itself.
 subcommands
 -----------
 
-mpc-whatson		#
-mpc-jump
-mpc-fade
-mpc-wake
-mpc-remove
-mpc-keep
-mpc-cdnp
-mpc-symlink
-mpc-queue
-mpc-pwd-update
-mpc-pwd-add
-mpc-x [next|prev|%position%]
+run mpcliffs without arguments to see a brief explanation
