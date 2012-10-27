@@ -129,7 +129,15 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 			echo "$RESULTS" | cut -d ' ' -f1 | tr '\n\t' ' ' > $LAFO.range
 			mpc play $(echo "$RESULTS" | sort -R -c1 | cut -d ' ' -f1)
 		else 
-			echo "$RESULTS"
+			echo "$RESULTS"			|\
+			sed -e 's/%/\\\\x/g'	|\
+			while read l;do
+				position=${l%	*}			# remove after tab
+				track="`echo -e ${l##*	}`" # remove before tab
+				track="${track/\//:}"		# replace / with :
+				track=${track## }			# trim front
+				printf "%s\t%s\n" "${position}" "$(basename "$track")" ;
+			done
 		fi
 
 
