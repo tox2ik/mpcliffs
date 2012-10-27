@@ -32,7 +32,7 @@ case "$0" in
 		if [ ! -z $ISON  ];then
 
 
-			FORMAT="%position%\t [[[%albumartist]|[%artist%]]&[ - %album%]&[ [-%track%]- %title% [(%time%)]]]|%file%]"
+			FORMAT="%position%\t [[[[%albumartist]|[%artist%]]&[ - %album%]&[ [-%track%]- %title% [(%time%)]]]|%file%]"
 
 			BEFORE=`echo "scale=2;$WLRANGE/2+1"|bc`
 			AFTER=`echo "scale=2;($WLRANGE*1.1+1)-($WLRANGE)/4"|bc`
@@ -42,7 +42,15 @@ case "$0" in
 
 			mpc -f "$FORMAT" playlist |\
 				grep "^$ISON	" -B $BEFORE -A $AFTER|\
-				sed -e "s/^$ISON	/$ISON>\t/" 
+				sed -e "s/^$ISON	/$ISON>\t/" |\
+				sed  -e 's/%/\\\\x/g'  |\
+				while read l;do
+					position="$(echo -e "$l"|cut -f1)"   
+					track="$(   echo -e "$l"|cut -f2)"
+					printf "%s\t%s\n" "$position" "$(basename "$track")" ;
+				done
+				# last sed-while read does urldecode
+
 
 		else 
 			echo Nothing is or was playing.
@@ -86,6 +94,7 @@ case "$0" in
 		while [ $# -ne 0 ]
 		do
 			case "$1" in 
+				-R) PLAYRANDOM=2;;
 				-r) PLAYRANDOM=1;;
 				-x) PLAYLAST=1;;
 				 *) if [[ $1 == *=* ]]; then
@@ -101,7 +110,7 @@ time=*|e=*|duration=*|d=*	 ) F=" $F $G \"${FS}${T[6]//%/}[^~]*${1/*=/}[^~]*${FS}
 file=*|f=*|path=*|p=*|dir=*	 ) F=" $F $G \"${FS}${T[7]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 position=*|pos=*			 ) F=" $F $G \"${FS}${T[8]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
-														*);;
+							*);;
 						esac
 					else
 						GREP="$GREP |grep -i \"$1\""
@@ -120,6 +129,11 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 		if [ $PLAYLAST -eq 1 ];then
 			echo "$RESULTS"
 			mpc play  $lf
+		elif [ $PLAYRANDOM -eq 2 ]; then
+			mpc play $(
+			for i in `cat $LAFO.range`;do
+				echo $i
+			done | rl -c1)
 		elif [ $PLAYRANDOM -eq 1 ]; then
 			# todo: make bash-random work
 			# total=`echo "$RESULTS" | wc -l`
@@ -132,6 +146,7 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 			# rlf=$(echo "$RESULTS" | awk 'NR=='$random' {print $0;}')
 			# #echo $rlf
 			# #echo mpc play $(echo $rlf | cut -d ' ' -f1) \[$total*0.${r}+1 = $random\]
+			echo "$RESULTS" | cut -d ' ' -f1 | tr '\n\t' ' ' > $LAFO.range
 			mpc play $(echo "$RESULTS" | rl -c1 | cut -d ' ' -f1)
 		else 
 			echo "$RESULTS"
