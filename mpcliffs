@@ -2,63 +2,43 @@
 
 # TODO
 # speecify a ROOT folder and make functions that depend on /M use $ROOT instead
-
-DEPMSG="WARNING: Some of the scripts rely on APP from "
-
-[ -x "`which rl 2>/dev/null`" ] || echo \
-	${DEPMSG/APP/rl} http://ch.tudelft.nl/~arthur/rl/
-[ -x "`which awk 2>/dev/null`" ] || echo \
-	${DEPMSG/APP/awk} http://www.gnu.org/software/gawk/gawk.html
+BC=/usr/bin/bc
 
 CONF=/etc/mpd.conf
 LAFO=$HOME/.mpc/lastfound
 
 case "$0" in 
 	*mpc-whatson) 
-
 		WLRANGE=${1:-20}
+		ISON=`mpc | awk '/\[playing\]/  {
+			print substr($2,2, length($2) - index($2,"/") - 1 ); }'`
 
-		#TODO generalize ison
-		ISON=`mpc |grep -Eo '\[playing\]\ #[0-9]+' | cut -d\# -f 2`
-
-		if [  -z $ISON  ];then
-			ISON=$(
-				cat `awk '/state_file/ {print $2}' $CONF |\
-				tr -d \'\"` |\
-				awk -F': ' ' NR=6 && /current:/ {print $2}'
-			)
+		if [[ -z $ISON ]];then
+			STATE=$(awk '/state_file/ {gsub("\"","",$0); print $2}' $CONF)
+			ISON=$( awk 'NR <=6 && /^current:/ {print $2}' $STATE )
 		fi
 
-		if [ ! -z $ISON  ];then
+		if [[ ! -z $ISON ]];then
+			FORMAT="%position%\t [[[[%albumartist]|[%artist%]]&[ - %album%]&"
+			FORMAT="$FORMAT[ [-%track%]- %title% [(%time%)]]]|%file%]"
 
-
-			FORMAT="%position%\t [[[[%albumartist]|[%artist%]]&[ - %album%]&[ [-%track%]- %title% [(%time%)]]]|%file%]"
-
-			BEFORE=`echo "scale=2;$WLRANGE/2+1"|bc`
-			AFTER=`echo "scale=2;($WLRANGE*1.1+1)-($WLRANGE)/4"|bc`
-			BEFORE=${BEFORE%.[0-9]*}
-			AFTER=${AFTER%.[0-9]*}
-
-
-			mpc -f "$FORMAT" playlist |\
-				grep "^$ISON	" -B $BEFORE -A $AFTER|\
-				sed -e "s/^$ISON	/$ISON>\t/" |\
-				sed  -e 's/%/\\\\x/g'  |\
+			BEFORE=$(( WLRANGE/2 + 1))
+			AFTER=$((  WLRANGE*100/110 +1))
+			mpc -f "$FORMAT" playlist					|\
+				grep "^$ISON\s\+" -B $BEFORE -A $AFTER	|\
+				sed -e "s/^$ISON/$ISON>/"				|\
+				sed -e 's/%/\\\\x/g'					|\
 				while read l;do
-					position="$(echo -e "$l"|cut -f1)"   
-					track="$(   echo -e "$l"|cut -f2)"
-					printf "%s\t%s\n" "$position" "$(basename "$track")" ;
+					position=${l%	*}			# remove after tab
+					track="`echo -e ${l##*	}`" # remove before tab
+					track="${track/\//:}"		# replace / with :
+					track=${track## }			# trim front
+					printf "%s\t%s\n" "${position}" "$(basename "$track")" ;
 				done
-				# last sed-while read does urldecode
-
-
 		else 
 			echo Nothing is or was playing.
-
 		fi
-
 		;;
-
 	*mpc-jump)
 		PLAYRANDOM=0
 		PLAYLAST=0
@@ -133,7 +113,7 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 			mpc play $(
 			for i in `cat $LAFO.range`;do
 				echo $i
-			done | rl -c1)
+			done | sort -R -c1)
 		elif [ $PLAYRANDOM -eq 1 ]; then
 			# todo: make bash-random work
 			# total=`echo "$RESULTS" | wc -l`
@@ -147,7 +127,7 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 			# #echo $rlf
 			# #echo mpc play $(echo $rlf | cut -d ' ' -f1) \[$total*0.${r}+1 = $random\]
 			echo "$RESULTS" | cut -d ' ' -f1 | tr '\n\t' ' ' > $LAFO.range
-			mpc play $(echo "$RESULTS" | rl -c1 | cut -d ' ' -f1)
+			mpc play $(echo "$RESULTS" | sort -R -c1 | cut -d ' ' -f1)
 		else 
 			echo "$RESULTS"
 		fi
@@ -159,27 +139,44 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 	*mpc-fade) 
 
 		if [ $# -ne 3 ]; then
-			echo "usage: mpc-fade <start> <end> <duration>" ;
+			echo "usage: mpc-fade <from> <to> <duration>" ;
 			exit 1;
-		fi
-
-		if [ ! -x `which bc` ]; then 
-			echo mpc-fade relies on bc. get it. 
-			exit 1
 		fi
 
 		VOLUME=$1
 
-		if [ $1 -lt $2 ]; then 
-			step=`echo "scale=3;$3/($2-$1)"|bc -l`; D=1; else
-			step=`echo "scale=3;$3/($1-$2)"|bc -l`; D=-1 
+		if [ -x "$BC" ]; then 
+
+			if [ $1 -lt $2 ]; then 
+				D=1;  step=`echo "scale=3;$3/($2-$1)"|$BC -l`; else
+				D=-1; step=`echo "scale=3;$3/($1-$2)"|$BC -l`; 
+			fi
+		else
+			echo needs more bc.
+			exit 1
+
+			#if [ $1 -lt $2 ]; then 
+			#	D=1;  step=$(( $3*1000 / ($2*100 - $1*100) )); else
+			#	D=-1; step=$(( $3*1000 / ($1*100 - $2*100) ));
+			#fi
+
+			#if [[ $step -gt 10 ]]; then
+			#	len=${#step}
+			#	last=$(( len -1 ))
+			#	step=${step:0:$len-1}.${step:$last:1};
+			#elif [[ $step -eq 10 ]]; then
+			#	echo 1
+			#elif [[ $step -eq 0 ]]; then
+			#	echo 0
+			#elif [[ $step -gt -1 ]]; then
+			#	step=.$step
+			#fi
 		fi
 
 		TVOL=$(( $2 + D ))
-
-		$(  #fork
+		$(
 		while [ $VOLUME -ne $TVOL ]; do
-			mpc volume $VOLUME > /dev/null
+			mpc volume $VOLUME >/dev/null
 			VOLUME=$(( VOLUME + D )) 
 			sleep $step;
 		done
