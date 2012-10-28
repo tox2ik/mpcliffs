@@ -11,7 +11,7 @@ case "$0" in
 	*mpc-whatson) 
 		WLRANGE=${1:-20}
 		ISON=`mpc | awk '/\[playing\]/  {
-			print substr($2,2, length($2) - index($2,"/") - 1 ); }'`
+			split(substr($2,2,length($2)),a,"/"); print a[1] }'`
 
 		if [[ -z $ISON ]];then
 			STATE=$(awk '/state_file/ {gsub("\"","",$0); print $2}' $CONF)
