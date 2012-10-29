@@ -7,34 +7,70 @@ BC=/usr/bin/bc
 CONF=/etc/mpd.conf
 LAFO=$HOME/.mpc/lastfound
 
+FS=~~~~
+
+function __urldecode {
+	sed -e 's/%/\\\\x/g' | while read line; do echo -e "$line" ;done
+}
+
 case "$0" in 
 	*mpc-whatson) 
-		WLRANGE=${1:-20}
-		ISON=`mpc | awk '/\[playing\]/  {
-			split(substr($2,2,length($2)),a,"/"); print a[1] }'`
+		WLRANGE=20
+		PIV=0
+		while [[ $# -gt 0 ]]; do
+			case "$1" in
+				[0-9]*) WLRANGE=$1;;
+				'-i') INTERACTIVE=1;;
+				'-p') getopts ":p:" pivot; PIV=$OPTARG;;
+			esac
+			shift
+		done
 
-		if [[ -z $ISON ]];then
-			STATE=$(awk '/state_file/ {gsub("\"","",$0); print $2}' $CONF)
-			ISON=$( awk 'NR <=6 && /^current:/ {print $2}' $STATE )
+		if [[ $PIV -eq 0 ]]; then
+			ISON=`mpc | awk '/\[playing\]/  {
+				split(substr($2,2,length($2)),a,"/"); print a[1] }'`
+			if [[ -z $ISON ]];then
+				STATE=$(awk '/state_file/ {gsub("\"","",$0); print $2}' $CONF)
+				ISON=$( awk 'NR <=6 && /^current:/ {print $2}' $STATE )
+			fi
+		else 
+			ISON=$PIV
 		fi
 
+		if [[ $INTERACTIVE -eq 1 ]]; then 
+			while [[ $browsing -eq 0 ]];do
+				mpc-whatson -p $PIV $WLRANGE 
+
+			read -p "yes? " song
+
+			if [[ $song =~ [0-9]+ ]];	then 
+				mpc-x $song;
+
+			elif [[ $song == "n" ]]; then let PIV=PIV+10
+			elif [[ $song == "p" ]]; then let PIV=PIV-10
+
+			else browsing=1
+			fi
+			done
+		fi
+
+
 		if [[ ! -z $ISON ]];then
-			FORMAT="%position%\t [[[[%albumartist]|[%artist%]]&[ - %album%]&"
+			FORMAT="%position%$FS[[[[%albumartist]|[%artist%]]&[ - %album%]&"
 			FORMAT="$FORMAT[ [-%track%]- %title% [(%time%)]]]|%file%]"
 
 			BEFORE=$(( WLRANGE/2 + 1))
 			AFTER=$((  WLRANGE*100/110 +1))
 			mpc -f "$FORMAT" playlist					|\
-				grep "^$ISON\s\+" -B $BEFORE -A $AFTER	|\
-				sed -e "s/^$ISON/$ISON>/"				|\
-				sed -e 's/%/\\\\x/g'					|\
-				while read l;do
-					position=${l%	*}			# remove after tab
-					track="`echo -e ${l##*	}`" # remove before tab
-					track="${track/\//:}"		# replace / with :
-					track=${track## }			# trim front
-					printf "%s\t%s\n" "${position}" "$(basename "$track")" ;
-				done
+				grep "^$ISON$FS" -B $BEFORE -A $AFTER	|\
+				__urldecode |\
+				sed -e "s/^$ISON$FS/$ISON>\t/" -e "s/^\([0-9]\+\)$FS/\1\t/"  |\
+				awk '{
+					filename=substr($0,1+index($0,"\t"),length($0));
+					filename=gensub("-([0-9]+)/([0-9]+)-","-\\1-","g",filename)
+					split(filename, a, "/"); 
+					printf "%s\t%s\n", $1, a[ length(a) ]
+				}'
 		else 
 			echo Nothing is or was playing.
 		fi
@@ -42,7 +78,7 @@ case "$0" in
 	*mpc-jump)
 		PLAYRANDOM=0
 		PLAYLAST=0
-		FS=~~~~
+		#FS=~~~~
 		T=(
 			#%name%         # Unknown (doesn't produce output)
 			%artist%       # Artist file tag
@@ -330,10 +366,11 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 
 	*mpc-x)
 		case "$1" in
-			next) mpc next |head -n 1|rev | cut -d / -f 1 | rev ;;
-			prev) mpc prev |head -n 1|rev | cut -d / -f 1 | rev ;;
-			[0-9]*) mpc play $1|head -n 1|rev | cut -d / -f 1 | rev ;;
-			   *) mpc play `cat $LAFO`|head -n 1|rev | cut -d / -f 1 | rev ;;
+			prev)   basename "$(mpc prev			|sed -ne1p)" | __urldecode;;
+			next)   basename "$(mpc next			|sed -ne1p)" | __urldecode;;
+			play)   basename "$(mpc play			|sed -ne1p)" | __urldecode;;
+			[0-9]*) basename "$(mpc play $1			|sed -ne1p)" | __urldecode;; 
+		         *) basename "$(mpc play $(<$LAFO)	|sed -ne1p)" | __urldecode;;
 		esac
 		;;
 	*x) mpc-x $1;;
@@ -361,33 +398,34 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 		;;
 
 	*) 
-		echo -e "$0 install [target]: make symlinks in \$2 \n  or here in: (`pwd`)\n"
-		echo -e mpc-whatson	"\tdisplays a part of the current list with the \n\t\tcurrently playing song somewhere in the middle"
-		echo -e mpc-jump	"\tgreps \`mpc playlist\` like so: \n\t\t\
-mpc-jump nick cave lime-tree arbour => \n\t\t\
-mpc playlist |\\ \n\t\t  grep -i nick |\\ \n\t\t  grep -i cave |\\ \n\t\t  grep -i lime-tree |\\ \n\t\t  grep -i arbour\n\t\t\
--x anywhere in the argument list will play the last found song\n\t\t\
--r will play a random song from the found list\n\t\t\
-supports specific flags filters like year=, artist=, title=\n\t\t(see code for full list) 
-"
-		echo -e mpc-fade "\ttakes 3 arguments and fades the volume \n\t\tfrom level (1) to level (2) in a number of seconds (3)\n\t\truns in the background"
-		echo -e mpc-wake "\tstarts playing and uses mpc-fase (edit at will)"
-		echo -e mpc-remove "\tremoves songs matching filter arguments (like mpc-jump)"
-		echo -e mpc-keep "\tsame as mpc-remove with inverse result"
-		echo -e mpc-cdnp "\tputs \`cd dir-of-now-playing-song\' in bash history\n\t\t(will need adjustments on your comp)"
-		echo -e mpc-symlink "\tcreates a symlink to the now-playing-song in \$2 \n\t\tor this folder if omitted"
-		echo -e mpc-queue "\tplaces a given song (queue number as seen in mpc-jump output)\n\t\tafter currently playing song"
-		echo -e mpc-pwd-update "\tmpc update \` folder where you are\'"
-		echo -e mpc-pwd-add "mpc add \` folder where you are\'"
-		echo -e mpc-x "\t\tplay [next|prev|%position%]"
 
-		if [ "$1" == "install" ];
-		then
+cat <<EOF
+[mpcliffs] COMMAND; where COMMAND is:
+mpc-whatson	show current song followed and preceeded by neigbours
+mpc-jump 	filters the playlist. result matches all arguments
+		-x play the last song in resulting list
+		-r play a random song from the resulting list
+		supports specific filters like year=, artist=, title=
+mpc-fade 	changes the volume level 
+mpc-wake 	starts playing and uses mpc-fase (edit at will)
+mpc-remove 	removes songs matching filter arguments (like mpc-jump)
+mpc-keep 	same as mpc-remove with inverse result
+mpc-cdnp 	append dirname of current song to bash history
+mpc-symlink 	symlinks current song to a folder or CWD 
+mpc-queue	places a song with a given index after current song
+mpc-pwd-update 	mpc update CWD
+mpc-pwd-add mpc add CWD if it is in the mpd db
+mpc-x 		play [next|prev|%position%]
+install		create symlinks to the above commands
+EOF
 
-		for i in `$0 |awk '/^mpc-/ {print $1}'`;do 
-			 ln -s "$0" ${2:-.}/$i
-		done
-		echo ok. call the symlinks...
+if [ "$1" == "install" ];
+then
+
+for i in `$0 |awk '/^mpc-/ {print $1}'`;do 
+	 ln -s "$0" ${2:-.}/$i
+done
+echo ok. call the symlinks...
 		fi;;
 
 esac
