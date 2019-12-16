@@ -324,10 +324,20 @@ date=*|year=*|y=*			 ) F=" $F $G \"${FS}${T[9]//%/}[^~]*${1/*=/}[^~]*${FS}\"";;
 			i=$j
 		done
 
+		let j=0
 		# remove the ranges
 		for (( i=0; i< $rc; i++));
 		do
-			mpc del ${rl[i]}-${rr[i]}
+			#mpc del ${rl[i]}-${rr[i]}
+			let j=j+${rr[i]}-${rl[i]}+1
+
+			if [[ -n $mpc_remove ]]; then
+				echo mpc del ${rl[i]}-${rr[i]}
+			else
+				mpc del ${rl[i]}-${rr[i]}
+			fi
+
+
 		done
 		;;
 
