@@ -5,7 +5,8 @@
 BC=/usr/bin/bc
 
 CONF=/etc/mpd.conf
-LAFO=$HOME/.mpc/lastfound
+LAFO=$HOME/.last/mpc-last-found
+
 
 FS=~~~~
 
